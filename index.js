@@ -1,83 +1,83 @@
 
+const sequelize = require("./model/dbconfig")
+const ToDo = require("./model/ToDo.model");
 const express = require('express');
 const app = express();
-const { Sequelize} = require("sequelize");
+app.use(express.json());
 
 
-const sequelize = new Sequelize({
-    dialect: "sqlite",
-    storage: "./sqliteData/database.sqlite",
-});
 
-const ToDo = sequelize.define("todo", {
-        id:{
-           type: Sequelize.DataTypes.UUID,
-            primaryKey: true,
-            defaultValue: Sequelize.DataTypes.UUIDV4,
-        },
-        title:{
-            type: Sequelize.STRING,
-            defaultValue: "Title",
-        },
-        description:{
-            type: Sequelize.STRING,
-            defaultValue: "",
-        },
-        isCompleted: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: false,
-        },
-});
 
-sequelize.sync().then(()=>{
-    app.listen(3000, function(){
-        console.log("Сервер запущен на 3000 порту");
-    });
-}).catch(err=>console.log(err));
+initBD = async() => {
+    try {
+        await sequelize.authenticate();
+        await sequelize.sync();
+        console.log("Sequelize was instaled");
+    } catch (error){
+        console.log("Sequelize ERROR",error);
+        process.exit();
+    }
+};
 
-app.get('/api/todos', (req, res) => {
-    ToDo.findAll({raw: true }).then(notes => res.json(notes));
+initBD().then(r => app.listen(3100, () => {
+    console.log('Application listening on port 3100!');
+}));
+
+app.get('/api/todos', async (req, res) => {
+    const todos = await ToDo.findAll();
+    res.send({todos});
 });
 app.get('/api/todos/:id', (req, res) => {
-    ToDo.findAll({ where: { id: req.params.id }}).then(notes => res.json(notes));
+    ToDo.findByPk(req.params.id).then(todo => res.json({todo}));
 });
 
-app.post('/api/todos', (req, res) => {
-    const newtitle = String(req.query.title);
-    const newdescription = String(req.query.description);
-    const newisDone = Boolean(req.query.isDone);
-    ToDo.create({title: newtitle, description: newdescription, isDone: newisDone}).then(function(note) {
-        res.json(note);
+app.post('/api/todos', async (req, res) => {
+    const newtodo = {
+        title: req.body.title,
+        description: req.body.description,
+        isCompleted: req.body.isCompleted
+    };
+    await ToDo.create(newtodo).then(function (todo) {
+        res.json({todo});
     });
 });
 
 app.patch('/api/todos/:id', function(req, res) {
-    ToDo.findByPk(req.params.id).then(function(todo) {
-        todo.update({
-            title: req.query.title,
-            description: req.query.description,
-            isDone: req.query.isDone
-        }).then((note) => {
-            res.json(note);
-        });
+    const updatetodo = req.body;
+
+    ToDo.findByPk(req.params.id).then(todo => {
+        if (todo !=null) {
+            todo.update({
+                title: updatetodo.title,
+                description: updatetodo.description,
+                isCompleted: updatetodo.isCompleted
+            }).then((todo) => {
+                res.json({todo});
+            });
+        }
+        else {
+            res.json({"Todo was null":""});
+        }
     });
 });
 
 app.delete('/api/todos/:id', function(req, res) {
-    ToDo.findByPk(req.params.id).then(function(todo) {
-        todo.destroy();
-    }).then((note) => {
-        res.sendStatus(200);
-    });
+    ToDo.findByPk(req.params.id).then(todo=> {
+        if (todo != null){
+                todo.destroy().then((todo) => {
+                res.json({"Todo was deleted":""});
+            });
+        }else{
+            res.json({"Todo was null":""});
+        }
+    })
 });
 app.delete('/api/todos', function(req, res) {
     ToDo.destroy({
         where: {},
         truncate: true
     }).then((todo) => {
-        res.sendStatus(200);
+        res.json({"Todo was deleted":""});
     });
 });
-
-
-
+module.exports = {sequelize, initBD};
